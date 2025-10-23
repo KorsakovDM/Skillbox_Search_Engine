@@ -1,0 +1,25 @@
+# Build directories
+/build*/
+/CMakeFiles/
+/CMakeCache.txt
+*.vcxproj*
+*.vcxproj.filters
+*.sln
+*.user
+*.opendb
+*.sdf
+*.suo
+
+# Binaries
+/bin/
+/Debug/
+/Release/
+/x64/
+/*.exe
+/*.dll
+/*.pdb
+/*.obj
+/*.lib
+
+# VSCode
+.vscode/
