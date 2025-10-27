@@ -3,23 +3,16 @@
 #include <unordered_map>
 #include <algorithm>
 
-// нормализация запроса
-static std::string normalize_q(std::string s) {
-    for (char& ch : s) {
-        if (ch >= 'A' && ch <= 'Z') ch = char(ch - 'A' + 'a');
-        else if (!((ch >= 'a' && ch <= 'z') || ch == ' ')) ch = ' ';
-    }
-    return s;
-}
-
+// Разделение запроса на слова
 static std::vector<std::string> split_words_q(const std::string& text) {
     std::vector<std::string> words;
-    std::istringstream iss(normalize_q(text));
+    std::istringstream iss(text);
     std::string w;
     while (iss >> w) words.push_back(w);
     return words;
 }
 
+// Поиск документов по запросам
 std::vector<std::vector<RelativeIndex>>
 SearchServer::search(const std::vector<std::string>& queries_input) {
     std::vector<std::vector<RelativeIndex>> all;
@@ -29,32 +22,35 @@ SearchServer::search(const std::vector<std::string>& queries_input) {
         auto words = split_words_q(q);
         if (words.empty()) { all.push_back({}); continue; }
 
-        // OR: суммируем частоты по всем словам запроса
+        // Абсолютная релевантность (сумма count по словам запроса)
         std::unordered_map<size_t, float> abs;
         for (const auto& w : words) {
-            const auto postings = index_.GetWordCount(w);
-            for (const auto& e : postings) abs[e.doc_id] += static_cast<float>(e.count);
+            for (const auto& e : index_.GetWordCount(w))
+                abs[e.doc_id] += static_cast<float>(e.count);
         }
         if (abs.empty()) { all.push_back({}); continue; }
 
-        // Нормализация
+        // Относительная релевантность rank = abs / max(abs)
         float mx = 0.f;
         for (const auto& kv : abs) mx = std::max(mx, kv.second);
 
         std::vector<RelativeIndex> rel;
         rel.reserve(abs.size());
-        for (const auto& kv : abs) rel.push_back({ kv.first, kv.second / mx });
+        for (const auto& kv : abs)
+            rel.push_back({ kv.first, kv.second / mx });
 
-        // Сортировка: rank↓, при равенстве doc_id↑
-        std::sort(rel.begin(), rel.end(), [](const RelativeIndex& a, const RelativeIndex& b){
+        // Сортировка: по rank ↓, doc_id ↑
+        std::sort(rel.begin(), rel.end(), [](const RelativeIndex& a, const RelativeIndex& b) {
             if (a.rank == b.rank) return a.doc_id < b.doc_id;
             return a.rank > b.rank;
         });
 
-        // Обрезка до лимита
-        if (static_cast<int>(rel.size()) > responses_limit_) rel.resize(responses_limit_);
+        // Ограничение по max_responses
+        if (static_cast<int>(rel.size()) > responses_limit_)
+            rel.resize(responses_limit_);
 
         all.push_back(std::move(rel));
     }
+
     return all;
 }
